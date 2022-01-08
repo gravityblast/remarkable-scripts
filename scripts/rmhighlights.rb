@@ -6,23 +6,23 @@ require "json"
 
 q = ARGV[0]
 if q.to_s.size == 0
-  puts "Usage: #{__FILE__} [QUERY]"
+  STDERR.puts "Usage: #{__FILE__} [QUERY]"
   exit 1
 end
 
 Dir.mktmpdir do |dir|
-  puts "working in #{dir}"
+  STDERR.puts "working in #{dir}"
   Dir.chdir dir
 
   files = `rmapi find / #{q}`.split("\n").map{|x| x[3..-1]}.map(&:strip)
   files.each.with_index do |f, i|
-    puts "#{i} - #{f}"
+    STDERR.puts "#{i} - #{f}"
   end
 
-  print ">> "
+  STDERR.print ">> "
   index = STDIN.gets.to_i
   if index < 0 || index >= files.size
-    puts "bad index"
+    STDERR.puts "bad index"
     exit 1
   end
 
@@ -30,19 +30,34 @@ Dir.mktmpdir do |dir|
   `rmapi get "#{path}"`
   `unzip "#{File.join("./", path)}"`
 
+  pages = JSON.parse(File.read(Dir["./*.content"].first))["pages"]
+
   all = []
   paths = Dir["./*highlights/*.json"]
-  contents = paths.map{|f| JSON.parse(File.read(f)) }
-  contents.each do |c|
-    c["highlights"].each do |hs|
+  paths.each do |path|
+    page_id = path.match(/([^\/]+)\.json$/)[1]
+    page = pages.index(page_id)
+
+    content = JSON.parse(File.read(path))
+    content["highlights"].each do |hs|
       hs.each do |h|
-        all << [h["start"], h["text"]]
+        all << {
+          page: page + 1,
+          start: h["start"],
+          text: h["text"]
+        }
       end
     end
   end
 
-  all.sort_by{|(s, t)| s}.each do |h|
-    puts h[1]
-    puts
+  current_page = 0
+  all.sort_by{|h| [h[:page], h[:start]]}.each do |h|
+    if h[:page] != current_page
+      puts
+      current_page = h[:page]
+      puts "Page #{current_page}"
+      puts
+    end
+    puts h[:text]
   end
 end
